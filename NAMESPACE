@@ -1,5 +1,5 @@
 useDynLib(nnclust)
-export(nnfind,mst,mst_restart,nncluster,clusterMember,trimCluster)
+export(nnfind,mst,mst_restart,nncluster,clusterMember,nearestCluster,trimCluster)
 S3method(print,nncluster)
 S3method(print,neighbours)
 S3method(print,summary.neighbours)

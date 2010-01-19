@@ -1,6 +1,7 @@
 \name{nncluster}
 \Rdversion{1.1}
 \alias{nncluster}
+\alias{nearestCluster}
 \alias{trimCluster}
 \alias{clusterMember}
 %- Also NEED an '\alias' for EACH other topic documented here.
@@ -17,9 +18,10 @@ original data points.
 
 }
 \usage{
-nncluster(x, threshold, fill = 0.95, maxclust = 20, give.up = 500,verbose=FALSE)
+nncluster(x, threshold, fill = 0.95, maxclust = 20, give.up = 500,verbose=FALSE,start=NULL)
 trimCluster(nnclust, size=10)
 clusterMember(nnclust, outlier=TRUE)
+nearestCluster(nnclust, threshold=Inf,outlier=FALSE)
 }
 %- maybe also 'usage' for other objects documented here.
 \arguments{
@@ -29,7 +31,8 @@ data matrix
   \item{threshold}{
 Threshold for stopping the tree building within a cluster. The tree
 stops when the squared euclidean distance to the closest point to the
-tree is greater than this.
+tree is greater than this. If \code{threshold} is a vector, the elements 
+will be used in succession, with the last element repeated as necessary.
 }
   \item{fill}{
 Stop when the clusters make up this fraction of the data.
@@ -48,6 +51,7 @@ less than \code{threshold}.
 \item{size}{Clusters smaller than this are added to the 'outlier' set}
 \item{outlier}{If \code{FALSE}, use \code{NA} for the cluster identifier
 for outliers}
+\item{start}{integer index to start the minimum spanning tree at this observation}
 }
 \details{
    Works best for well-separated clusters in up to 8
@@ -57,6 +61,10 @@ If you want a complete minimum spanning tree, run \code{mst} on the
 outlier set and then use \code{nnfind} to find the shortest links
 connecting the clusters. When there are well-separated clusters this
 will be faster than running \code{mst} once on the whole data set.
+
+\code{clusterMember} returns a vector of integers indicating cluster membership. Outliers are treated as a separate cluster if \code{outlier} is \code{TRUE}, otherwise they code as \code{NA}.  \code{nearestCluster} assigns outliers at distance less than \code{threshold} from a cluster to the cluster whose nearest member is closest.
+
+\code{trimCluster} returns a new \code{nncluster} object with small clusters converted to outliers. There must be at least one cluster larger than \code{size}.
 }
 \value{
 A list of class \code{nncluster}. Each element but the last
@@ -66,6 +74,7 @@ the initial data set.
 
 The last element describes the unclustered outliers and has no
 \code{mst} component.
+
 }
 
 \author{
@@ -75,6 +84,8 @@ Thomas Lumley
   The performance of this algorithm depends critically on the
   performance of the nearest-neighbour finder, and can decay
   catastrophically if too many uninformative variables are added.
+
+  The performance can also be poor if the data are close to being ordered on some of the variables.
 }
 
 %% ~Make other sections like Warning with \section{Warning }{....} ~

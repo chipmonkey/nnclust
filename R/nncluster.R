@@ -3,15 +3,22 @@
 
 #library(nnclust)
 
-nncluster<-function(x, threshold, fill=0.95, maxclust=20, give.up=500,verbose=FALSE){
+nncluster<-function(x, threshold, fill=0.95, maxclust=20, give.up=500,verbose=FALSE,start=NULL){
   forest<-list()
   i<-1
   n<-nrow(x)
   m<-0
-  start<-1
+  if (is.null(start)){
+    nn<-nnfind(x)
+    start<-which.min(nn$dist)
+  }
   rows<-1:n
   repeat({
-    tree<-list(mst=mst_restart(x, start=start-1, threshold=threshold))
+    if (length(threshold)<i)
+      thresh<-threshold[length(threshold)]
+    else
+      thresh<-threshold[i]
+    tree<-list(mst=mst_restart(x, start=start-1, threshold=thresh))
     tree$x<-x[c(start,tree$mst$to),,drop=FALSE]
     tree$rows<-rows[c(start,tree$mst$to)]
     rows<-rows[-c(start,tree$mst$to)]
@@ -19,24 +26,26 @@ nncluster<-function(x, threshold, fill=0.95, maxclust=20, give.up=500,verbose=FA
     m<-m+nrow(tree$x)
     forest[[i]]<-tree
     nn<-nnfind(x)
-    if (!any(nn$dist<threshold)) break;
+    if (!any(nn$dist<thresh)) break;
     if (m/n > fill) break;
-    if (sum(nn$dist<threshold)<give.up) break;
+    if (sum(nn$dist<thresh)<give.up) break;
     if (i==maxclust) break;
     if (verbose)
-       print(c(m, nrow(x), sum(nn$dist<threshold)))
+       print(c(m, nrow(x), sum(nn$dist<thresh)))
     i<-i+1
     start<-which.min(nn$dist)
   })
   forest[[i+1]]<-list(x=x,rows=rows)
+  attr(forest,"threshold")<-threshold
   class(forest)<-"nncluster"
   forest		     
 }
 
 trimCluster<-function(nnclust, size=10){
   n<-length(nnclust)
-  sizes<-sapply(nnclust[-n],function(t) t$mst$n)
+  sizes<-sapply(nnclust[-n], function(t) t$mst$n)
   small<-sizes<size
+  if (all(small)) stop(paste("There are no clusters larger than ",size))
   if (any(small)){
     tmp<-nnclust[which(small)]
     smallx<-do.call(rbind,lapply(tmp, function(t) t$x))
@@ -53,6 +62,13 @@ print.nncluster<-function(x,...){
   cat("MST-based clustering in ",NCOL(x[[1]]$x)," dimensions\n")
   cat("Cluster sizes:",sapply(x[-length(x)], function(t) t$mst$n),"\n")
   cat(" and ",NROW(x[[length(x)]]$x)," outliers\n")
+  d<-attr(x,"threshold")
+  if (length(d)==1){
+    cat("Threshold =",d,"\n")
+  }else{
+    cat("Thresholds")
+    print(d)
+  }
   invisible(x)
 }
 
@@ -67,29 +83,17 @@ clusterMember<-function(nnclust,outlier=TRUE){
   index
 }
 
-nnSampleCluster<-function(x, threshold, samplesize=5000, fill=0.95, maxclust=20, give.up=20, nsamples=10,verbose=FALSE){
-  if (nrow(x) < 2*samplesize+1) stop("samplesize is too large")
-  if (samplesize<1 || samplesize<maxclust || samplesize<give.up) stop("samplesize is too small")
 
-  meandist<-Inf
-  best<-list()
-  for(i in 1:nsamples){
-    keep <- sample(nrow(x), samplesize,replace=FALSE)
-    cluster <- nncluster(x[keep,], threshold, fill=fill, maxclust=maxclust, give.up=give.up,verbose=FALSE)
-    link <- nnfind(x[keep,],x[-keep,])
-    distances<-c(link$dist, do.call(c,lapply(cluster, function(tree) tree$dist)))
-    if (mean(distances)<meandist) {
-      meandist<-mean(distances)
-      best<-list(keep,cluster,link)
-    }
-  }
-  find<-nnfind(x[-keep,])
-  boost<- sample(nrow(x)-samplesize, samplesize, prob=exp(link$dist-find$dist))
-  cluster2 <- nncluster(x[-keep,][boost,], threshold, fill=fill, maxclust=maxclust, give.up=give.up,verbose=FALSE)
-  if (nrow(x)>2*samplesize+3)
-    link2<-nnfind(x[-keep,][boost,],x[-keep,][-boost,])
-  else
-    link2<-NULL
-  clusters<-list(keep, cluster,link, boost,cluster2,link2)
-  clusters
+nearestCluster<-function(nnclust, threshold=Inf,outlier=FALSE){
+  incluster<-clusterMember(nnclust, outlier=FALSE)
+  m<-length(nnclust)
+  indata<-do.call(rbind, lapply(nnclust[-m], function(cluster) cluster$x))
+  inrows<-do.call(c, lapply(nnclust[-m], function(cluster) cluster$rows))
+  dists<-nnfind(indata,nnclust[[m]]$x)
+  dists$neighbour[dists$dist>threshold]<-NA
+  nearest<- incluster[inrows[dists$neighbour]]
+  incluster[nnclust[[m]]$rows]<-nearest
+  if (outlier)
+    incluster[is.na(incluster)]<-max(incluster,na.rm=TRUE)+1
+  incluster
 }
